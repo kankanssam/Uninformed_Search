@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>8-퍼즐 탐색 알고리즘 (BFS/DFS) 시뮬레이터</title>
+    <title>맹목적 탐색 알고리즘 시뮬레이터 (8-퍼즐 & 랜덤 계층 그래프)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://d3js.org/d3.v7.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -18,16 +18,17 @@
             overscroll-behavior: none; 
         }
 
-        #canvas-container {
+        #canvas-container, #svg-wrapper {
             touch-action: none; 
             -webkit-user-select: none;
             user-select: none;
         }
 
-        button, .node-group, .node-cell.clickable, .btn-bfs-check, .btn-dfs-check, label {
+        button, .node-cell.clickable, .btn-bfs-check, .btn-dfs-check, label, .tab-btn {
             touch-action: manipulation; 
         }
 
+        /* 8-Puzzle Styles */
         .puzzle-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -56,11 +57,6 @@
             background-color: #fef08a; 
             color: transparent;
         }
-
-        .node-group {
-            cursor: pointer;
-            -webkit-tap-highlight-color: transparent;
-        }
         
         .node-rect {
             fill: #ffffff;
@@ -71,25 +67,10 @@
             transition: all 0.2s;
         }
 
-        .node-cell {
-            fill: #ffffff;
-            stroke: #e5e7eb;
-            stroke-width: 1;
-        }
-        
-        .node-cell.empty {
-            fill: #fef3c7; 
-        }
-
-        .node-cell.clickable {
-            cursor: pointer;
-            fill: #dbeafe; 
-            transition: fill 0.2s;
-        }
-
-        .node-cell.clickable:hover {
-            fill: #bfdbfe;
-        }
+        .node-cell { fill: #ffffff; stroke: #e5e7eb; stroke-width: 1; }
+        .node-cell.empty { fill: #fef3c7; }
+        .node-cell.clickable { cursor: pointer; fill: #dbeafe; transition: fill 0.2s; }
+        .node-cell.clickable:hover { fill: #bfdbfe; }
 
         .node-text {
             font-size: 18px;
@@ -100,240 +81,287 @@
             pointer-events: none;
         }
 
+        /* Alphabet Graph Styles */
+        .node-circle {
+            fill: #ffffff;
+            stroke: #4b5563;
+            stroke-width: 3;
+            transition: all 0.3s ease;
+        }
+        .node-circle.explored { fill: #dbeafe; stroke: #2563eb; stroke-width: 4; }
+        .node-circle.goal { fill: #d1fae5; stroke: #10b981; }
+        
+        .graph-node-text {
+            font-size: 22px;
+            font-weight: bold;
+            fill: #1f2937;
+            text-anchor: middle;
+            dominant-baseline: central;
+            pointer-events: none;
+        }
+
+        /* Common & Link Styles */
+        .node-group {
+            cursor: grab;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .node-group:active {
+            cursor: grabbing;
+        }
+
         .link-path {
             fill: none;
-            stroke: #9ca3af;
-            stroke-width: 2;
+            stroke: #cbd5e1;
+            stroke-width: 3;
+            transition: stroke 0.3s ease, stroke-width 0.3s ease;
         }
+        .link-path.explored { stroke: #60a5fa; stroke-width: 5; }
 
         .link-label-bg {
             fill: #ffffff;
-            opacity: 0.9;
+            stroke: #e5e7eb;
+            stroke-width: 1.5;
+            rx: 6; ry: 6;
         }
 
         .link-label {
-            font-size: 13px;
-            font-weight: 700;
-            fill: #4b5563;
+            font-size: 15px;
+            font-weight: 800;
+            fill: #ef4444; 
             text-anchor: middle;
             dominant-baseline: central;
         }
 
+        /* Highlights */
         .highlight-ring {
             fill: none;
             stroke: #3b82f6; 
-            stroke-width: 4;
-            rx: 6;
-            ry: 6;
+            stroke-width: 5;
+            rx: 6; ry: 6;
             animation: pulse-ring 1.5s infinite;
         }
-
-        .highlight-ring.dfs {
-            stroke: #ef4444; 
-        }
-
-        .highlight-ring.goal {
-            stroke: #10b981; 
-            animation: pulse-ring-goal 1.5s infinite;
-        }
+        .highlight-ring.graph { rx: 50%; ry: 50%; stroke-width: 6; }
+        .highlight-ring.dfs { stroke: #ef4444; }
+        .highlight-ring.goal { stroke: #10b981; animation: pulse-ring-goal 1.5s infinite; }
 
         @keyframes pulse-ring {
             0% { stroke-opacity: 1; transform: scale(1); stroke-width: 4; }
-            50% { stroke-opacity: 0.5; transform: scale(1.05); stroke-width: 6; }
+            50% { stroke-opacity: 0.5; transform: scale(1.05); stroke-width: 7; }
             100% { stroke-opacity: 1; transform: scale(1); stroke-width: 4; }
         }
-
         @keyframes pulse-ring-goal {
             0% { stroke-opacity: 1; transform: scale(1); stroke-width: 6; }
             50% { stroke-opacity: 0.8; transform: scale(1.1); stroke-width: 8; }
             100% { stroke-opacity: 1; transform: scale(1); stroke-width: 6; }
         }
 
+        /* UI Components */
         .toast-container {
-            position: fixed;
-            bottom: 60px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-            pointer-events: none; 
-            width: 90%;
-            max-width: 400px;
-            align-items: center;
+            position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%);
+            z-index: 50; display: flex; flex-direction: column; gap: 10px;
+            pointer-events: none; width: 90%; max-width: 420px; align-items: center;
         }
 
         .toast {
-            padding: 12px 24px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 500;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            animation: slide-up 0.3s ease-out;
-            transition: opacity 0.3s ease-in;
-            text-align: center;
-            width: auto;
+            padding: 14px 24px; border-radius: 8px; color: white; font-weight: 700; font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            animation: slide-up 0.3s ease-out; transition: opacity 0.3s ease-in; text-align: center;
         }
-
         .toast.error { background-color: #ef4444; }
         .toast.success { background-color: #10b981; }
         .toast.info { background-color: #3b82f6; }
 
-        @keyframes slide-up {
-            from { transform: translateY(100%); opacity: 0; }
-            to { transform: translateY(0); opacity: 1; }
-        }
+        @keyframes slide-up { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
         .minimap-container {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 200px;
-            height: 150px;
-            background-color: white;
-            border: 2px solid #cbd5e1;
-            border-radius: 8px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-            overflow: hidden;
-            z-index: 20;
-            cursor: pointer; 
-            -webkit-tap-highlight-color: transparent;
+            position: absolute; top: 20px; right: 20px; width: 200px; height: 150px;
+            background-color: white; border: 2px solid #cbd5e1; border-radius: 8px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); overflow: hidden; z-index: 20; cursor: pointer; 
         }
-        
-        @media (min-width: 768px) {
-            .minimap-container { width: 240px; height: 180px; }
-        }
+        @media (min-width: 768px) { .minimap-container { width: 240px; height: 180px; } }
 
-        #minimap-svg {
-            width: 100%;
-            height: 100%;
-        }
-
-        .minimap-viewport {
-            fill: rgba(59, 130, 246, 0.15);
-            stroke: #2563eb;
-            stroke-width: 2;
-            cursor: move;
-        }
+        #minimap-svg { width: 100%; height: 100%; }
+        .minimap-viewport { fill: rgba(59, 130, 246, 0.15); stroke: #2563eb; stroke-width: 2; cursor: move; }
         
-        .btn-bfs-check:checked + div {
-            border-color: #2563eb;
-            background-color: #3b82f6;
-            color: white;
-        }
-        .btn-dfs-check:checked + div {
-            border-color: #dc2626;
-            background-color: #ef4444;
-            color: white;
-        }
+        .btn-bfs-check:checked + div { border-color: #2563eb; background-color: #3b82f6; color: white; }
+        .btn-dfs-check:checked + div { border-color: #dc2626; background-color: #ef4444; color: white; }
+        .btn-cost-check:checked + div { border-color: #059669; background-color: #10b981; color: white; }
+        
+        .tab-active { border-bottom: 3px solid #2563eb; color: #2563eb; font-weight: 700; background-color: #eff6ff;}
+        .tab-inactive { border-bottom: 3px solid transparent; color: #6b7280; font-weight: 500; }
+        .tab-inactive:hover { background-color: #f9fafb; }
     </style>
 </head>
 <body class="h-screen w-screen flex flex-col md:flex-row">
 
-    <aside class="w-full h-[45vh] md:h-full md:w-[340px] bg-white shadow-lg flex flex-col z-10 border-r border-gray-200 shrink-0">
+    <aside class="w-full h-[40vh] md:h-full md:w-[350px] bg-white shadow-lg flex flex-col z-10 border-r border-gray-200 shrink-0">
         <div class="p-3 md:p-5 bg-blue-600 text-white flex items-center gap-3 shrink-0">
             <i class="fas fa-network-wired text-xl md:text-2xl"></i>
             <div>
                 <p class="text-[10px] md:text-xs font-medium text-blue-200 mb-0.5">인공지능기초교과</p>
-                <h1 class="text-base md:text-lg font-bold leading-tight">8-퍼즐 탐색 <span class="text-sm md:text-lg font-bold inline">(맹목적 탐색)</span></h1>
+                <h1 class="text-base md:text-lg font-bold leading-tight">맹목적 탐색 <span class="text-xs md:text-sm font-normal inline">시뮬레이터</span></h1>
             </div>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 md:p-5 space-y-5 md:space-y-6">
-            <div class="space-y-3">
+        <!-- Mode Tabs -->
+        <div class="flex border-b border-gray-200 shrink-0">
+            <button id="tab-graph" class="tab-btn flex-1 py-2.5 text-sm transition-all tab-active flex items-center justify-center gap-2">
+                <i class="fas fa-project-diagram"></i> 알파벳 그래프
+            </button>
+            <button id="tab-puzzle" class="tab-btn flex-1 py-2.5 text-sm transition-all tab-inactive flex items-center justify-center gap-2">
+                <i class="fas fa-th"></i> 8-퍼즐
+            </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-4 md:p-5 flex flex-col gap-4">
+            
+            <!-- GRAPH SPECIFIC UI -->
+            <div id="ui-section-graph" class="space-y-4">
+                <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3">
+                    <div>
+                        <h3 class="text-xs md:text-sm font-bold text-gray-800 mb-2">1. 그래프 출제 설정</h3>
+                        <div class="flex gap-2 mb-2">
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="graphCost" value="none" class="peer sr-only btn-cost-check" checked>
+                                <div class="p-1.5 text-center rounded border-2 border-gray-200 bg-white text-gray-600 transition shadow-sm hover:bg-gray-50 font-bold text-xs">
+                                    비용 없음 <span class="block text-[10px] font-normal mt-0.5">(노드 8개 이상)</span>
+                                </div>
+                            </label>
+                            <label class="flex-1 cursor-pointer">
+                                <input type="radio" name="graphCost" value="show" class="peer sr-only btn-cost-check">
+                                <div class="p-1.5 text-center rounded border-2 border-gray-200 bg-white text-gray-600 transition shadow-sm hover:bg-gray-50 font-bold text-xs">
+                                    비용 있음 <span class="block text-[10px] font-normal mt-0.5">(노드 6개 이상)</span>
+                                </div>
+                            </label>
+                        </div>
+                        <button id="btn-new-graph" class="w-full py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded transition text-xs shadow-sm flex items-center justify-center gap-1.5">
+                            <i class="fas fa-sync-alt"></i> 새로운 랜덤 그래프 생성
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="text-xs text-red-600 font-bold bg-red-50 p-3 rounded border border-red-200 shadow-sm">
+                    <i class="fas fa-exclamation-circle"></i> 하단의 '탐색 경로 작성' 폼에서 정답을 맞춰야 시뮬레이션 버튼이 활성화됩니다.<br>
+                    <div class="mt-2.5 p-2 bg-white rounded border border-red-100 text-gray-700 font-normal shadow-sm">
+                        <span class="font-bold text-blue-700 flex items-center gap-1 mb-1"><i class="fas fa-list-ol"></i> 노드 방문 우선순위</span>
+                        <span id="rule-guide-text" class="text-[11px] leading-tight block">알파벳 오름차순 (A → Z)</span>
+                    </div>
+                    <span class="text-indigo-600 block mt-2 text-[11px]"><i class="fas fa-hand-pointer"></i> 노드를 드래그하여 배치를 조정할 수 있습니다.</span>
+                </div>
+            </div>
+
+            <!-- PUZZLE SPECIFIC UI -->
+            <div id="ui-section-puzzle" class="space-y-4 hidden">
                 <div class="bg-gray-50 p-3 rounded-lg border border-gray-200 shadow-sm flex flex-col gap-3 overflow-hidden">
                     <div class="flex items-center justify-around gap-2">
                         <div class="flex-1 text-center w-full min-w-0">
-                            <h3 class="text-xs sm:text-sm font-bold text-gray-700 mb-1.5">초기 상태</h3>
+                            <h3 class="text-xs font-bold text-gray-700 mb-1.5">초기 상태</h3>
                             <div class="puzzle-grid mx-auto" id="ui-initial-state"></div>
                         </div>
-                        <i class="fas fa-arrow-right text-gray-400 shrink-0"></i>
+                        <i class="fas fa-arrow-right text-gray-400 shrink-0 text-sm"></i>
                         <div class="flex-1 text-center w-full min-w-0">
-                            <h3 class="text-xs sm:text-sm font-bold text-gray-700 mb-1.5">목표 상태</h3>
+                            <h3 class="text-xs font-bold text-gray-700 mb-1.5">목표 상태</h3>
                             <div class="puzzle-grid mx-auto" id="ui-goal-state"></div>
                         </div>
                     </div>
                     <div class="flex gap-2 mt-1">
-                        <button id="btn-textbook" class="flex-1 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 font-bold rounded border border-green-200 transition flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm">
+                        <button id="btn-textbook" class="flex-1 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 font-bold rounded border border-green-200 transition flex items-center justify-center gap-1.5 text-xs shadow-sm">
                             <i class="fas fa-book"></i> 교과서
                         </button>
-                        <button id="btn-shuffle" class="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold rounded border border-indigo-200 transition flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm">
+                        <button id="btn-shuffle" class="flex-1 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold rounded border border-indigo-200 transition flex items-center justify-center gap-1.5 text-xs shadow-sm">
                             <i class="fas fa-random"></i> 랜덤
                         </button>
                     </div>
                 </div>
             </div>
 
-            <div>
-                <h3 class="text-sm md:text-md font-bold text-gray-800 border-b pb-2 mb-3">설정</h3>
-                <div class="space-y-3 md:space-y-4 text-sm">
-                    <div>
-                        <div class="flex gap-2">
-                            <label class="flex-1 cursor-pointer">
-                                <input type="radio" name="algorithm" value="BFS" class="peer sr-only btn-bfs-check" checked>
-                                <div class="p-2 text-center rounded border-2 border-blue-200 bg-blue-50 text-blue-600 transition shadow-sm hover:bg-blue-100">
-                                    <div class="font-bold text-xs md:text-sm">너비 우선(BFS)</div>
-                                </div>
-                            </label>
-                            <label class="flex-1 cursor-pointer">
-                                <input type="radio" name="algorithm" value="DFS" class="peer sr-only btn-dfs-check">
-                                <div class="p-2 text-center rounded border-2 border-red-200 bg-red-50 text-red-600 transition shadow-sm hover:bg-red-100">
-                                    <div class="font-bold text-xs md:text-sm">깊이 우선(DFS)</div>
-                                </div>
-                            </label>
-                        </div>
+            <!-- COMMON UI -->
+            <div class="mt-auto space-y-4 border-t pt-4 border-gray-200">
+                <div>
+                    <h3 class="text-xs md:text-sm font-bold text-gray-800 mb-2">2. 탐색 시뮬레이션 설정</h3>
+                    <div class="flex gap-2 mb-3">
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="algorithm" value="BFS" class="peer sr-only btn-bfs-check" checked>
+                            <div class="p-2 text-center rounded border-2 border-blue-200 bg-blue-50 text-blue-600 transition shadow-sm hover:bg-blue-100">
+                                <div class="font-bold text-xs md:text-sm">너비 우선(BFS)</div>
+                            </div>
+                        </label>
+                        <label class="flex-1 cursor-pointer">
+                            <input type="radio" name="algorithm" value="DFS" class="peer sr-only btn-dfs-check">
+                            <div class="p-2 text-center rounded border-2 border-red-200 bg-red-50 text-red-600 transition shadow-sm hover:bg-red-100">
+                                <div class="font-bold text-xs md:text-sm">깊이 우선(DFS)</div>
+                            </div>
+                        </label>
                     </div>
-
-                    <button id="btn-start" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg transition shadow-md flex items-center justify-center gap-2">
-                        <i class="fas fa-play"></i> 탐색 시작
-                    </button>
+                    
+                    <!-- Buttons Container -->
+                    <div id="btn-container">
+                        <button id="btn-puzzle-start" class="w-full py-2.5 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-lg transition shadow-md flex items-center justify-center gap-2 text-sm hidden">
+                            <i class="fas fa-play"></i> 클릭 탐색 시작(초기화)
+                        </button>
+                        <button id="btn-graph-auto" class="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition shadow-md flex items-center justify-center gap-2 text-sm hidden">
+                            <i class="fas fa-robot"></i> 자동 탐색 시뮬레이션 시작
+                        </button>
+                    </div>
                 </div>
-            </div>
 
-            <div class="bg-blue-50 text-blue-800 p-3 md:p-4 rounded-lg border border-blue-100 relative">
-                <div class="flex justify-between items-center mb-2 md:mb-3 border-b border-blue-200 pb-2">
-                    <h4 class="text-sm font-bold text-blue-900"><i class="fas fa-info-circle"></i> 방법</h4>
-                    <button id="btn-concept" class="text-[10px] md:text-xs bg-blue-600 text-white px-2 py-1 md:px-2.5 md:py-1.5 rounded hover:bg-blue-700 transition shadow-sm font-bold flex items-center gap-1">
-                        <i class="fas fa-book-open"></i> 개념
+                <div class="flex gap-2 items-stretch">
+                    <div class="flex-1 bg-gray-100 p-2 rounded text-center flex flex-col justify-center border border-gray-200 shadow-inner">
+                        <div class="text-gray-600 text-[10px] md:text-xs mb-0.5">방문 횟수 / 정답 진행</div>
+                        <div class="font-bold text-xl md:text-2xl text-blue-600" id="stat-visited">0</div>
+                    </div>
+                    <button id="btn-concept" class="flex-none bg-blue-50 hover:bg-blue-100 text-blue-700 px-3 rounded font-bold transition text-xs flex flex-col items-center justify-center gap-1 border border-blue-200 shadow-sm">
+                        <i class="fas fa-book-open text-base"></i> 개념보기
                     </button>
-                </div>
-                <ol class="list-decimal pl-4 space-y-1.5 text-[11px] md:text-[13px] font-medium leading-relaxed">
-                    <li><strong>탐색 기법</strong> 선택 후 <strong>탐색 시작</strong></li>
-                    <li><strong class="text-blue-600">반짝이는 테두리</strong>의 노드를 터치(클릭). 첫 퍼즐은 자동 열림.</li>
-                    <li>빈칸(노란색) 주변 <strong>파란색 활성 숫자</strong>를 터치하며 풀이.</li>
-                </ol>
-            </div>
-            
-            <div>
-                <div class="bg-gray-100 p-2 md:p-3 rounded text-center">
-                    <div class="text-gray-600 text-[11px] md:text-sm mb-1">방문(풀이) 횟수</div>
-                    <div class="font-bold text-2xl md:text-3xl text-blue-600" id="stat-visited">0<span class="text-sm md:text-lg text-gray-500 ml-1">회</span></div>
                 </div>
             </div>
         </div>
     </aside>
 
-    <main class="flex-1 relative cursor-grab active:cursor-grabbing bg-[#fafafa]" id="canvas-container">
-        <svg id="tree-svg" class="w-full h-full absolute top-0 left-0"></svg>
-        
-        <div class="minimap-container hidden md:block" id="minimap" title="터치/클릭하여 해당 위치로 이동">
-            <svg id="minimap-svg"></svg>
+    <main class="flex-1 flex flex-col bg-[#fafafa]" id="main-container">
+        <!-- SVG Area -->
+        <div class="flex-1 relative overflow-hidden" id="svg-wrapper">
+            <svg id="tree-svg" class="w-full h-full absolute top-0 left-0 cursor-grab active:cursor-grabbing"></svg>
+            
+            <div class="minimap-container hidden md:block" id="minimap" title="터치/클릭하여 해당 위치로 이동">
+                <svg id="minimap-svg"></svg>
+            </div>
+
+            <div class="absolute bottom-4 right-4 flex gap-2 z-10">
+                <button id="btn-zoom-in" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-plus"></i></button>
+                <button id="btn-zoom-out" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-minus"></i></button>
+                <button id="btn-zoom-fit" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-compress"></i></button>
+            </div>
         </div>
 
-        <div class="absolute bottom-12 md:bottom-16 right-3 md:right-4 flex gap-2 z-10">
-            <button id="btn-zoom-in" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-plus"></i></button>
-            <button id="btn-zoom-out" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-minus"></i></button>
-            <button id="btn-zoom-fit" class="bg-white p-2.5 md:p-3 rounded-full shadow-lg text-gray-700 hover:bg-gray-50"><i class="fas fa-compress"></i></button>
-        </div>
+        <!-- Graph Path Input Area (Bottom) -->
+        <div id="graph-path-panel" class="bg-white border-t border-gray-200 p-4 shadow-[0_-4px_10px_-1px_rgba(0,0,0,0.05)] z-20 flex flex-col md:flex-row gap-4 items-center justify-center shrink-0 hidden">
+            <div class="text-sm font-bold text-gray-700 whitespace-nowrap flex items-center gap-2">
+                <i class="fas fa-edit text-indigo-600"></i> 탐색 경로 작성
+                <span id="path-hint-text" class="text-[11px] font-normal text-gray-600 bg-gray-100 border border-gray-200 px-2.5 py-0.5 rounded-full">시작: A (알파벳 오름차순 방문)</span>
+            </div>
+            
+            <div class="flex w-full md:w-auto gap-3 flex-1 max-w-2xl justify-center transition-all">
+                <!-- DFS Input -->
+                <div id="dfs-input-container" class="items-center gap-2 bg-red-50 p-2 px-3 rounded-lg border border-red-200 flex-1 hidden transition-all">
+                    <span class="text-xs font-bold text-red-700 whitespace-nowrap"><i class="fas fa-arrow-down mr-1"></i>DFS 경로</span>
+                    <input type="text" id="input-dfs-path" placeholder="예: ABC..." class="flex-1 px-2 py-1.5 border border-red-300 rounded text-sm uppercase tracking-widest font-bold focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-colors">
+                    <button id="btn-check-dfs" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-bold transition shadow-sm whitespace-nowrap">정답확인</button>
+                </div>
 
-        <div class="absolute bottom-2 md:bottom-4 w-full text-center text-gray-400 text-[10px] md:text-sm z-10 pointer-events-none font-medium">
-            Copyright &copy; 2026 kankanclass. All rights reserved.
+                <!-- BFS Input -->
+                <div id="bfs-input-container" class="items-center gap-2 bg-blue-50 p-2 px-3 rounded-lg border border-blue-200 flex-1 flex transition-all">
+                    <span class="text-xs font-bold text-blue-700 whitespace-nowrap"><i class="fas fa-water mr-1"></i>BFS 경로</span>
+                    <input type="text" id="input-bfs-path" placeholder="예: ABC..." class="flex-1 px-2 py-1.5 border border-blue-300 rounded text-sm uppercase tracking-widest font-bold focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors">
+                    <button id="btn-check-bfs" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold transition shadow-sm whitespace-nowrap">정답확인</button>
+                </div>
+            </div>
         </div>
     </main>
 
     <div class="toast-container" id="toast-container"></div>
 
+    <!-- Concept Modal -->
     <div id="concept-modal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden flex flex-col max-h-[90vh] transform transition-all">
             <div class="bg-blue-600 text-white px-4 md:px-5 py-3 md:py-4 flex justify-between items-center shrink-0">
@@ -346,7 +374,7 @@
                         <i class="fas fa-search text-blue-600"></i> 맹목적 탐색 <span class="text-[11px] md:text-sm font-normal text-gray-500">(Blind Search)</span>
                     </h3>
                     <p class="leading-relaxed bg-gray-50 p-3 rounded border border-gray-200">
-                        목표 상태에 대한 특별한 힌트 없이, 정해진 순서에 따라 기계적으로 탐색 공간을 뒤져서 해를 찾는 방법입니다. 비정보 탐색이라고도 부릅니다.
+                        목표 상태에 대한 특별한 힌트 없이, 정해진 순서에 따라 기계적으로 탐색 공간을 뒤져서 해를 찾는 방법입니다.
                     </p>
                 </div>
                 
@@ -355,9 +383,8 @@
                         <i class="fas fa-water"></i> 너비 우선 탐색 <span class="text-[11px] md:text-sm font-normal text-blue-600">(BFS)</span>
                     </h3>
                     <ul class="list-disc pl-5 space-y-1 md:space-y-1.5 leading-relaxed">
-                        <li><strong>개념:</strong> 시작 상태에서 가까운 깊이의 노드들을 모두 탐색한 뒤에, 그 다음 깊이로 내려갑니다. (물결처럼)</li>
-                        <li><strong>특징:</strong> 해가 존재한다면 반드시 <strong>최단 경로</strong>를 찾아냅니다.</li>
-                        <li><strong>자료구조:</strong> 큐(Queue)를 사용합니다.</li>
+                        <li><strong>개념:</strong> 시작 상태에서 가까운 깊이의 노드들을 모두 탐색한 뒤에, 그 다음 깊이로 내려갑니다.</li>
+                        <li><strong>특징:</strong> 인접한 형제 노드들을 먼저 방문합니다. (비용이 없으면 알파벳 순, 비용이 있으면 <strong>낮은 비용 우선</strong>) 큐(Queue)를 사용합니다.</li>
                     </ul>
                 </div>
 
@@ -366,9 +393,8 @@
                         <i class="fas fa-arrow-down"></i> 깊이 우선 탐색 <span class="text-[11px] md:text-sm font-normal text-red-600">(DFS)</span>
                     </h3>
                     <ul class="list-disc pl-5 space-y-1 md:space-y-1.5 leading-relaxed">
-                        <li><strong>개념:</strong> 한 번 결정한 경로를 따라 가장 깊은 곳까지 쭉 파고든 뒤, 갈 곳이 없으면 이전으로 돌아옵니다.</li>
-                        <li><strong>특징:</strong> 메모리를 적게 쓰지만, <strong>최단 경로 보장이 없고 무한 루프</strong> 위험이 있습니다.</li>
-                        <li><strong>자료구조:</strong> 스택(Stack)을 사용합니다.</li>
+                        <li><strong>개념:</strong> 한 번 결정한 경로를 따라 가장 깊은 곳까지 쭉 파고든 뒤, 갈 곳이 없으면 되돌아옵니다.</li>
+                        <li><strong>특징:</strong> 인접 노드 중 하나를 선택해 끝까지 파고듭니다. (비용이 없으면 알파벳 순, 비용이 있으면 <strong>낮은 비용 우선</strong>) 스택(Stack)을 사용합니다.</li>
                     </ul>
                 </div>
             </div>
@@ -379,6 +405,7 @@
     </div>
 
     <script>
+        // --- Audio Setup ---
         const script = document.createElement('script');
         script.src = "https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js";
         document.head.appendChild(script);
@@ -407,73 +434,553 @@
             }, { once: true, passive: true })
         );
 
+        // --- Common Application State ---
+        let currentMode = 'graph'; 
+        let autoSimInterval = null; 
+        
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.innerHTML = `<i class="fas ${type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-2"></i>${message}`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        // --- Mode Switching Logic ---
+        const tabGraph = document.getElementById('tab-graph');
+        const tabPuzzle = document.getElementById('tab-puzzle');
+        const secGraph = document.getElementById('ui-section-graph');
+        const secPuzzle = document.getElementById('ui-section-puzzle');
+        const pathPanel = document.getElementById('graph-path-panel');
+        const btnPuzzleStart = document.getElementById('btn-puzzle-start');
+        const btnGraphAuto = document.getElementById('btn-graph-auto');
+
+        function switchMode(mode) {
+            currentMode = mode;
+            playSound('click');
+            
+            if(autoSimInterval) { clearInterval(autoSimInterval); autoSimInterval = null; }
+
+            if(mode === 'graph') {
+                tabGraph.className = "tab-btn flex-1 py-2.5 text-sm transition-all tab-active flex items-center justify-center gap-2";
+                tabPuzzle.className = "tab-btn flex-1 py-2.5 text-sm transition-all tab-inactive flex items-center justify-center gap-2";
+                secGraph.classList.remove('hidden');
+                secPuzzle.classList.add('hidden');
+                pathPanel.classList.remove('hidden');
+                
+                btnPuzzleStart.classList.add('hidden');
+                if(graphState.isPathSolved) btnGraphAuto.classList.remove('hidden');
+                else btnGraphAuto.classList.add('hidden');
+
+                document.getElementById('stat-visited').innerHTML = "0";
+                updatePathInputVisibility();
+            } else {
+                tabPuzzle.className = "tab-btn flex-1 py-2.5 text-sm transition-all tab-active flex items-center justify-center gap-2";
+                tabGraph.className = "tab-btn flex-1 py-2.5 text-sm transition-all tab-inactive flex items-center justify-center gap-2";
+                secPuzzle.classList.remove('hidden');
+                secGraph.classList.add('hidden');
+                pathPanel.classList.add('hidden');
+                
+                btnPuzzleStart.classList.remove('hidden');
+                btnGraphAuto.classList.add('hidden');
+
+                document.getElementById('stat-visited').innerHTML = "0<span class='text-xs text-gray-500 ml-1'>회</span>";
+            }
+            
+            g.selectAll("*").remove();
+            minimapG.selectAll("*").remove();
+            
+            if(mode === 'graph') {
+                if(graphState.nodes.length === 0) createNewGraph();
+                else renderGraphStatic();
+            }
+            else startPuzzleGame();
+        }
+
+        tabGraph.addEventListener('click', () => { if(currentMode !== 'graph') switchMode('graph'); });
+        tabPuzzle.addEventListener('click', () => { if(currentMode !== 'puzzle') switchMode('puzzle'); });
+
+        function updatePathInputVisibility() {
+            if(currentMode !== 'graph') return;
+            const alg = document.querySelector('input[name="algorithm"]:checked').value;
+            if (alg === 'BFS') {
+                document.getElementById('dfs-input-container').classList.remove('flex');
+                document.getElementById('dfs-input-container').classList.add('hidden');
+                document.getElementById('bfs-input-container').classList.remove('hidden');
+                document.getElementById('bfs-input-container').classList.add('flex');
+            } else {
+                document.getElementById('bfs-input-container').classList.remove('flex');
+                document.getElementById('bfs-input-container').classList.add('hidden');
+                document.getElementById('dfs-input-container').classList.remove('hidden');
+                document.getElementById('dfs-input-container').classList.add('flex');
+            }
+        }
+
+        // ---------------------------------------------------------
+        // GRAPH MODE LOGIC
+        // ---------------------------------------------------------
+        let graphState = {
+            algorithm: 'BFS', showCost: false, nodes: [], links: [], adj: {}, 
+            expectedDFSPath: "", expectedBFSPath: "", 
+            expectedPath: "", currentIndex: 0, visitedCount: 0, isGoalReached: false,
+            isPathSolved: false
+        };
+
+        function generateRandomGraph(isCost) {
+            const numNodes = isCost ? Math.floor(Math.random() * 3) + 6 : Math.floor(Math.random() * 3) + 8;
+            const nodes = Array.from({length: numNodes}, (_, i) => ({ id: String.fromCharCode(65 + i) }));
+            const links = [];
+            const adj = {};
+            const degree = {};
+            
+            nodes.forEach(n => { adj[n.id] = []; degree[n.id] = 0; n.depth = 0; });
+
+            for (let i = 1; i < numNodes; i++) {
+                let u = nodes[i].id;
+                let validParents = nodes.slice(0, i).filter(n => isCost || degree[n.id] < 3);
+                if(validParents.length === 0) validParents = nodes.slice(0, i); 
+                let parent = validParents[Math.floor(Math.random() * validParents.length)].id;
+
+                let cost = isCost ? Math.floor(Math.random() * 9) + 1 : null;
+                links.push({ source: u, target: parent, cost: cost });
+                adj[u].push({node: parent, cost: cost}); 
+                adj[parent].push({node: u, cost: cost});
+                degree[u]++; degree[parent]++;
+            }
+
+            const extraEdges = isCost ? 3 : 2;
+            for (let i = 0; i < extraEdges; i++) {
+                let validNodes = nodes.filter(n => isCost || degree[n.id] < 3);
+                if(validNodes.length >= 2) {
+                    let uIdx = Math.floor(Math.random() * validNodes.length);
+                    let vIdx = Math.floor(Math.random() * validNodes.length);
+                    while(uIdx === vIdx && validNodes.length > 1) {
+                        vIdx = Math.floor(Math.random() * validNodes.length);
+                    }
+                    let u = validNodes[uIdx].id;
+                    let v = validNodes[vIdx].id;
+
+                    if (!adj[u].some(x => x.node === v)) {
+                        let cost = isCost ? Math.floor(Math.random() * 9) + 1 : null;
+                        links.push({ source: u, target: v, cost: cost });
+                        adj[u].push({node: v, cost: cost});
+                        adj[v].push({node: u, cost: cost});
+                        degree[u]++; degree[v]++;
+                    }
+                }
+            }
+
+            // 계층 구조를 위해 A부터 BFS로 깊이(Depth) 계산
+            let queue = ['A'];
+            let visited = new Set(['A']);
+            nodes.find(n => n.id === 'A').depth = 0;
+            
+            while(queue.length > 0) {
+                let currId = queue.shift();
+                let currNode = nodes.find(n => n.id === currId);
+                let neighbors = adj[currId].map(x => x.node).sort();
+                for(let n of neighbors) {
+                    if(!visited.has(n)) {
+                        visited.add(n);
+                        let neighborNode = nodes.find(node => node.id === n);
+                        neighborNode.depth = currNode.depth + 1;
+                        queue.push(n);
+                    }
+                }
+            }
+
+            // 물리 엔진
+            nodes.find(n => n.id === 'A').fx = 0;
+            nodes.find(n => n.id === 'A').fy = -180;
+
+            const simulation = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d => d.id).distance(isCost ? 160 : 130))
+                .force("charge", d3.forceManyBody().strength(-1500)) 
+                .force("collide", d3.forceCollide().radius(50))
+                .force("x", d3.forceX(0).strength(0.08)) 
+                .force("y", d3.forceY(d => (d.depth * 130) - 180).strength(1.2)); 
+
+            for (let i = 0; i < 300; ++i) simulation.tick(); 
+            simulation.stop();
+            
+            nodes.forEach(n => { n.fx = null; n.fy = null; });
+
+            return { nodes, links, adj };
+        }
+
+        // 우선순위: 낮은 비용 우선 -> 같으면 알파벳 오름차순
+        function computeExpectedGraphPath(alg, startNode, adj, isCost) {
+            let path = "";
+            let visited = new Set();
+            
+            if (alg === 'BFS') {
+                let q = [startNode];
+                visited.add(startNode);
+                while(q.length > 0) {
+                    let curr = q.shift();
+                    path += curr;
+                    
+                    let neighbors = [...adj[curr]];
+                    if (isCost) {
+                        neighbors.sort((a, b) => {
+                            if (a.cost === b.cost) return a.node.localeCompare(b.node);
+                            return a.cost - b.cost;
+                        });
+                    } else {
+                        neighbors.sort((a, b) => a.node.localeCompare(b.node));
+                    }
+                    
+                    for(let n of neighbors) {
+                        if(!visited.has(n.node)) {
+                            visited.add(n.node);
+                            q.push(n.node);
+                        }
+                    }
+                }
+            } else { 
+                function dfs(curr) {
+                    visited.add(curr);
+                    path += curr;
+                    
+                    let neighbors = [...adj[curr]];
+                    if (isCost) {
+                        neighbors.sort((a, b) => {
+                            if (a.cost === b.cost) return a.node.localeCompare(b.node);
+                            return a.cost - b.cost;
+                        });
+                    } else {
+                        neighbors.sort((a, b) => a.node.localeCompare(b.node));
+                    }
+                    
+                    for(let n of neighbors) {
+                        if(!visited.has(n.node)) dfs(n.node);
+                    }
+                }
+                dfs(startNode);
+            }
+            return path;
+        }
+
+        function createNewGraph() {
+            playSound('click');
+            if(autoSimInterval) { clearInterval(autoSimInterval); autoSimInterval = null; }
+            
+            const costRadios = document.getElementsByName('graphCost');
+            for (let radio of costRadios) if (radio.checked) graphState.showCost = (radio.value === 'show');
+            
+            const graphData = generateRandomGraph(graphState.showCost);
+            graphState.nodes = graphData.nodes;
+            graphState.links = graphData.links;
+            graphState.adj = graphData.adj;
+            
+            // UI 힌트 텍스트 및 안내 문구 업데이트
+            const hintEl = document.getElementById('path-hint-text');
+            const ruleGuideEl = document.getElementById('rule-guide-text');
+            if(graphState.showCost) {
+                if(hintEl) hintEl.innerHTML = "시작: A <strong class='text-blue-600'>(낮은 비용 우선 방문)</strong>";
+                if(ruleGuideEl) ruleGuideEl.innerHTML = "1. 낮은 비용 우선 <br> 2. 비용이 같을 경우 알파벳 오름차순";
+            } else {
+                if(hintEl) hintEl.innerHTML = "시작: A (알파벳 오름차순 방문)";
+                if(ruleGuideEl) ruleGuideEl.innerHTML = "알파벳 오름차순 (A → Z)";
+            }
+
+            graphState.expectedDFSPath = computeExpectedGraphPath('DFS', 'A', graphState.adj, graphState.showCost);
+            graphState.expectedBFSPath = computeExpectedGraphPath('BFS', 'A', graphState.adj, graphState.showCost);
+            
+            graphState.isPathSolved = false; 
+            btnGraphAuto.classList.add('hidden'); 
+
+            document.getElementById('input-dfs-path').value = '';
+            document.getElementById('input-bfs-path').value = '';
+            
+            resetGraphExploration();
+            showToast(`새로운 그래프가 출제되었습니다. 해당 알고리즘 경로를 폼에 입력해주세요.`, "info");
+        }
+
+        document.getElementById('btn-new-graph').addEventListener('click', createNewGraph);
+
+        document.getElementsByName('graphCost').forEach(radio => {
+            radio.addEventListener('change', () => { if(currentMode === 'graph') createNewGraph(); });
+        });
+
+        function resetGraphExploration() {
+            if(autoSimInterval) { clearInterval(autoSimInterval); autoSimInterval = null; }
+            const algRadios = document.getElementsByName('algorithm');
+            for (let radio of algRadios) if (radio.checked) graphState.algorithm = radio.value;
+
+            graphState.nodes.forEach(n => { n.status = 'hidden'; });
+            graphState.links.forEach(l => { l.explored = false; });
+            graphState.currentIndex = 0;
+            graphState.visitedCount = 0;
+            graphState.isGoalReached = false;
+            
+            graphState.expectedPath = graphState.algorithm === 'DFS' ? graphState.expectedDFSPath : graphState.expectedBFSPath;
+
+            svg.transition().duration(750).call(zoom.transform, getGraphResponsiveTransform());
+            renderGraphStatic();
+        }
+
+        function renderGraphStatic() {
+            if (currentMode !== 'graph') return;
+            
+            g.selectAll("*").remove();
+            const NODE_RADIUS = 30;
+
+            const linkGroup = g.selectAll(".link-group").data(graphState.links).enter().append("g").attr("class", "link-group");
+            
+            linkGroup.append("line")
+                .attr("class", d => `link-path ${d.explored ? 'explored' : ''}`)
+                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+                .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+            
+            if (graphState.showCost) {
+                const labelGroup = linkGroup.append("g").attr("class", "label-group")
+                    .attr("transform", d => `translate(${(d.source.x + d.target.x) / 2}, ${(d.source.y + d.target.y) / 2})`);
+                
+                labelGroup.append("rect").attr("class", "link-label-bg").attr("width", 32).attr("height", 26).attr("x", -16).attr("y", -13);
+                labelGroup.append("text").attr("class", "link-label").text(d => d.cost);
+            }
+
+            const targetId = (graphState.isPathSolved && !graphState.isGoalReached) ? graphState.expectedPath[graphState.currentIndex] : null;
+
+            const nodeGroup = g.selectAll(".node-group").data(graphState.nodes).enter().append("g").attr("class", "node-group")
+                .attr("transform", d => `translate(${d.x},${d.y})`);
+                
+            const dragHandler = d3.drag()
+                .on("start", function(event, d) {
+                    event.sourceEvent.stopPropagation(); 
+                    d3.select(this).raise(); 
+                })
+                .on("drag", function(event, d) {
+                    d.x = event.x;
+                    d.y = event.y;
+                    d3.select(this).attr("transform", `translate(${d.x},${d.y})`);
+                    
+                    g.selectAll(".link-path")
+                        .attr("x1", l => l.source.x).attr("y1", l => l.source.y)
+                        .attr("x2", l => l.target.x).attr("y2", l => l.target.y);
+                    
+                    if (graphState.showCost) {
+                        g.selectAll(".label-group")
+                            .attr("transform", l => `translate(${(l.source.x + l.target.x) / 2}, ${(l.source.y + l.target.y) / 2})`);
+                    }
+                })
+                .on("end", function(event, d) {
+                    updateMinimap(graphState.nodes, graphState.links, NODE_RADIUS*2, NODE_RADIUS*2);
+                });
+
+            nodeGroup.call(dragHandler);
+
+            nodeGroup.on("click", function(event, d) {
+                if (event.defaultPrevented) return; 
+                processGraphNodeClick(d);
+            });
+                
+            nodeGroup.append("circle")
+                .attr("class", d => `highlight-ring graph ${d.id === targetId ? (graphState.algorithm === 'DFS' ? 'dfs' : 'bfs') : ''}`)
+                .attr("r", NODE_RADIUS + 8)
+                .style("opacity", d => (d.id === targetId) ? 1 : 0);
+            
+            nodeGroup.append("circle")
+                .attr("class", d => `node-circle ${d.status === 'explored' ? 'explored' : ''}`)
+                .attr("r", NODE_RADIUS);
+            nodeGroup.append("text").attr("class", "graph-node-text").text(d => d.id);
+
+            if (graphState.isPathSolved) {
+                document.getElementById('stat-visited').innerHTML = `<span class="text-gray-500 text-sm">진행:</span> ${graphState.expectedPath.substring(0, graphState.currentIndex)} <span class="text-xs text-gray-400">(${graphState.currentIndex}/${graphState.expectedPath.length})</span>`;
+            } else {
+                document.getElementById('stat-visited').innerHTML = `<span class="text-gray-500 text-sm">대기중</span>`;
+            }
+
+            updateMinimap(graphState.nodes, graphState.links, NODE_RADIUS*2, NODE_RADIUS*2);
+        }
+
+        function processGraphNodeClick(data) {
+            if (!graphState.isPathSolved) {
+                playSound('error');
+                showToast("먼저 하단의 탐색 경로를 작성하고 정답을 맞춰주세요.", "error");
+                return;
+            }
+
+            if (graphState.isGoalReached) { showToast("이미 모든 노드 탐색을 완료했습니다.", "info"); return; }
+            
+            const expectedId = graphState.expectedPath[graphState.currentIndex];
+
+            if (data.id !== expectedId) {
+                playSound('error');
+                if (data.status === 'explored') showToast("이미 탐색을 완료한 노드입니다.", "error");
+                else showToast(`[${graphState.algorithm}] 순서상 다음에 탐색할 노드가 아닙니다. 방문 원칙을 다시 확인하세요.`, "error");
+                return;
+            }
+            
+            playSound('expand');
+            data.status = 'explored';
+            
+            if (graphState.currentIndex > 0) {
+                graphState.links.forEach(l => {
+                    if ((l.source.id === data.id && graphState.nodes.find(n=>n.id===l.target.id).status==='explored') || 
+                        (l.target.id === data.id && graphState.nodes.find(n=>n.id===l.source.id).status==='explored')) {
+                        l.explored = true;
+                    }
+                });
+            }
+
+            graphState.currentIndex++;
+            if (graphState.currentIndex === graphState.expectedPath.length) {
+                graphState.isGoalReached = true;
+                showToast("모든 노드 탐색을 완벽하게 완료했습니다! 🎉", "success");
+                playSound('success');
+            }
+            renderGraphStatic();
+        }
+
+        function runAutoSimulation() {
+            playSound('click');
+            if(autoSimInterval) clearInterval(autoSimInterval);
+            
+            resetGraphExploration(); 
+
+            autoSimInterval = setInterval(() => {
+                if(graphState.isGoalReached) {
+                    clearInterval(autoSimInterval);
+                    autoSimInterval = null;
+                    return;
+                }
+                
+                const nextId = graphState.expectedPath[graphState.currentIndex];
+                const nextNode = graphState.nodes.find(n => n.id === nextId);
+                
+                nextNode.status = 'explored';
+                
+                if (graphState.currentIndex > 0) {
+                    graphState.links.forEach(l => {
+                        if ((l.source.id === nextNode.id && graphState.nodes.find(n=>n.id===l.target.id).status==='explored') || 
+                            (l.target.id === nextNode.id && graphState.nodes.find(n=>n.id===l.source.id).status==='explored')) {
+                            l.explored = true;
+                        }
+                    });
+                }
+
+                graphState.currentIndex++;
+                
+                if (graphState.currentIndex === graphState.expectedPath.length) {
+                    graphState.isGoalReached = true;
+                    showToast("시뮬레이션 완료! 🎉", "success");
+                    playSound('success');
+                } else {
+                    playSound('expand');
+                }
+                
+                renderGraphStatic();
+            }, 1000); 
+        }
+
+        document.getElementById('btn-graph-auto').addEventListener('click', runAutoSimulation);
+
+        function verifyPath(type) {
+            playSound('click');
+            const inputEl = document.getElementById(`input-${type}-path`);
+            const cleanedVal = inputEl.value.replace(/[^a-zA-Z]/g, '').toUpperCase();
+            
+            if(cleanedVal.length === 0) {
+                showToast("경로를 알파벳으로 입력해주세요.", "error");
+                inputEl.focus();
+                return;
+            }
+
+            const expected = type === 'dfs' ? graphState.expectedDFSPath : graphState.expectedBFSPath;
+
+            if (cleanedVal === expected) {
+                playSound('success');
+                showToast(`정답입니다! 좌측의 [자동 탐색 시뮬레이션 시작] 버튼이 활성화되었습니다.`, "success");
+                
+                inputEl.classList.remove('border-red-300', 'border-blue-300', 'focus:border-red-500', 'focus:border-blue-500');
+                inputEl.classList.add('border-green-500', 'ring-1', 'ring-green-500', 'bg-green-50');
+                
+                graphState.isPathSolved = true;
+                btnGraphAuto.classList.remove('hidden'); 
+                
+                graphState.algorithm = type.toUpperCase();
+                const radioBtn = document.querySelector(`input[name="algorithm"][value="${graphState.algorithm}"]`);
+                if(radioBtn) radioBtn.checked = true;
+                
+                resetGraphExploration();
+                
+                setTimeout(() => {
+                    inputEl.classList.remove('border-green-500', 'ring-1', 'ring-green-500', 'bg-green-50');
+                    inputEl.classList.add(`border-${type === 'dfs' ? 'red' : 'blue'}-300`);
+                }, 2500);
+            } else {
+                playSound('error');
+                showToast(`${type.toUpperCase()} 경로가 틀렸습니다. 방문 원칙을 다시 확인해보세요!`, "error");
+            }
+        }
+
+        document.getElementById('btn-check-dfs').addEventListener('click', () => verifyPath('dfs'));
+        document.getElementById('btn-check-bfs').addEventListener('click', () => verifyPath('bfs'));
+
+        document.getElementsByName('algorithm').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                if(currentMode === 'graph') { 
+                    graphState.algorithm = e.target.value; 
+                    updatePathInputVisibility();
+                    
+                    if(autoSimInterval) { clearInterval(autoSimInterval); autoSimInterval = null; }
+                    graphState.isPathSolved = false;
+                    btnGraphAuto.classList.add('hidden');
+                    document.getElementById('input-dfs-path').value = '';
+                    document.getElementById('input-bfs-path').value = '';
+                    resetGraphExploration(); 
+                }
+                if(currentMode === 'puzzle') { puzzleState.algorithm = e.target.value; startPuzzleGame(); }
+            });
+        });
+
+        // ---------------------------------------------------------
+        // 8-PUZZLE MODE LOGIC
+        // ---------------------------------------------------------
         const textbookProblemGoal = [1, 2, 3, 8, 0, 4, 7, 6, 5];
         const textbookProblemInitial = [2, 8, 3, 1, 0, 4, 7, 6, 5]; 
-
         let currentProblemGoal = [...textbookProblemGoal];
         let currentProblemInitial = [...textbookProblemInitial]; 
         
-        let currentState = {
-            initial: [], goal: [], algorithm: 'BFS', 
-            treeData: null, frontier: [], explored: new Set(),
-            nodeIdCounter: 0, searchCount: 0, isGoalReached: false
+        let puzzleState = {
+            initial: [], goal: [], algorithm: 'BFS', treeData: null, frontier: [],
+            explored: new Set(), nodeIdCounter: 0, searchCount: 0, isGoalReached: false
         };
 
         const stateToString = (state) => state.join(',');
-        const isGoal = (state) => stateToString(state) === stateToString(currentState.goal);
-
+        const isGoal = (state) => stateToString(state) === stateToString(puzzleState.goal);
         function isAdjacent(idx1, idx2) {
-            const r1 = Math.floor(idx1 / 3), c1 = idx1 % 3;
-            const r2 = Math.floor(idx2 / 3), c2 = idx2 % 3;
-            return Math.abs(r1 - r2) + Math.abs(c1 - c2) === 1;
+            const r1 = Math.floor(idx1/3), c1 = idx1%3, r2 = Math.floor(idx2/3), c2 = idx2%3;
+            return Math.abs(r1-r2) + Math.abs(c1-c2) === 1;
         }
 
         function getValidChildren(state) {
-            const blankIdx = state.indexOf(0);
-            const row = Math.floor(blankIdx / 3);
-            const col = blankIdx % 3;
-            
+            const bIdx = state.indexOf(0), r = Math.floor(bIdx/3), c = bIdx%3;
             const possibleMoves = [
-                { dir: 'Up', condition: row > 0, idx: blankIdx - 3, label: '위쪽' },
-                { dir: 'Left', condition: col > 0, idx: blankIdx - 1, label: '왼쪽' },
-                { dir: 'Down', condition: row < 2, idx: blankIdx + 3, label: '아래쪽' },
-                { dir: 'Right', condition: col < 2, idx: blankIdx + 1, label: '오른쪽' }
+                { dir: 'Up', condition: r>0, idx: bIdx-3, label: '위쪽' },
+                { dir: 'Left', condition: c>0, idx: bIdx-1, label: '왼쪽' },
+                { dir: 'Down', condition: r<2, idx: bIdx+3, label: '아래쪽' },
+                { dir: 'Right', condition: c<2, idx: bIdx+1, label: '오른쪽' }
             ];
-
-            const displayOrder = ['Up', 'Left', 'Down', 'Right'];
-            const moves = displayOrder.map(dir => possibleMoves.find(m => m.dir === dir)).filter(m => m.condition);
-
+            const moves = ['Up', 'Left', 'Down', 'Right'].map(dir => possibleMoves.find(m => m.dir === dir)).filter(m => m.condition);
             const children = [];
             for (let move of moves) {
-                const newState = [...state];
-                newState[blankIdx] = newState[move.idx];
-                newState[move.idx] = 0;
-                children.push({ state: newState, label: move.label, movedIdx: move.idx, oldBlankIdx: blankIdx });
+                const ns = [...state]; ns[bIdx] = ns[move.idx]; ns[move.idx] = 0;
+                children.push({ state: ns, label: move.label, movedIdx: move.idx, oldBlankIdx: bIdx });
             }
             return children;
         }
 
         function generateRandomSolvable(goal, steps = 6) {
-            let curr = [...goal];
-            let lastStateStr = stateToString(curr);
-            
+            let curr = [...goal], lastStateStr = stateToString(curr);
             for (let i = 0; i < steps; i++) {
-                const blankIdx = curr.indexOf(0);
-                const r = Math.floor(blankIdx / 3);
-                const c = blankIdx % 3;
-                const mvs = [
-                    { c: r>0, i: blankIdx-3 }, { c: c>0, i: blankIdx-1 },
-                    { c: r<2, i: blankIdx+3 }, { c: c<2, i: blankIdx+1 }
-                ].filter(m => m.c);
-                
-                let nextStates = mvs.map(m => {
-                    let ns = [...curr]; ns[blankIdx] = ns[m.i]; ns[m.i] = 0; return ns;
-                }).filter(ns => stateToString(ns) !== lastStateStr);
-                
-                if (nextStates.length > 0) {
-                    lastStateStr = stateToString(curr);
-                    curr = nextStates[Math.floor(Math.random() * nextStates.length)];
-                }
+                const bIdx = curr.indexOf(0), r = Math.floor(bIdx/3), c = bIdx%3;
+                const mvs = [{c: r>0, i: bIdx-3}, {c: c>0, i: bIdx-1}, {c: r<2, i: bIdx+3}, {c: c<2, i: bIdx+1}].filter(m => m.c);
+                let nextStates = mvs.map(m => { let ns = [...curr]; ns[bIdx] = ns[m.i]; ns[m.i] = 0; return ns; }).filter(ns => stateToString(ns) !== lastStateStr);
+                if (nextStates.length > 0) { lastStateStr = stateToString(curr); curr = nextStates[Math.floor(Math.random() * nextStates.length)]; }
             }
             return curr;
         }
@@ -482,451 +989,301 @@
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             state.forEach(val => {
-                const div = document.createElement('div');
-                div.className = `puzzle-cell ${val === 0 ? 'empty' : ''}`;
-                div.textContent = val === 0 ? '' : val;
+                const div = document.createElement('div'); div.className = `puzzle-cell ${val === 0 ? 'empty' : ''}`; div.textContent = val === 0 ? '' : val;
                 container.appendChild(div);
             });
         }
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toast-container');
-            const toast = document.createElement('div');
-            toast.className = `toast ${type}`;
-            toast.innerHTML = `<i class="fas ${type === 'error' ? 'fa-exclamation-triangle' : type === 'success' ? 'fa-check-circle' : 'fa-info-circle'} mr-2"></i>${message}`;
-            container.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.opacity = '0';
-                setTimeout(() => toast.remove(), 300);
-            }, 3000);
-        }
+        function startPuzzleGame() {
+            playSound('click');
+            const algRadios = document.getElementsByName('algorithm');
+            for (let radio of algRadios) if (radio.checked) puzzleState.algorithm = radio.value;
 
-        function updateStats() {
-            document.getElementById('stat-visited').innerHTML = `${currentState.searchCount}<span class="text-[11px] md:text-lg text-gray-500 ml-1">회</span>`;
-        }
+            puzzleState.goal = [...currentProblemGoal]; puzzleState.initial = [...currentProblemInitial];
+            puzzleState.explored = new Set(); puzzleState.frontier = []; puzzleState.nodeIdCounter = 0;
+            puzzleState.searchCount = 1; puzzleState.isGoalReached = false;
 
-        const svg = d3.select("#tree-svg");
-        const g = svg.append("g");
+            renderUIPuzzle('ui-initial-state', puzzleState.initial);
+            renderUIPuzzle('ui-goal-state', puzzleState.goal);
+
+            puzzleState.treeData = {
+                id: ++puzzleState.nodeIdCounter, state: puzzleState.initial, actionLabel: '출발!',
+                children: null, expanded: false, isGoal: false, status: 'solved'
+            };
+
+            puzzleState.explored.add(stateToString(puzzleState.initial));
+            puzzleState.frontier.push(puzzleState.treeData);
+            if (isGoal(puzzleState.initial)) { puzzleState.treeData.isGoal = true; puzzleState.isGoalReached = true; }
+
+            svg.transition().duration(750).call(zoom.transform, getPuzzleResponsiveTransform());
+            renderPuzzleTree();
+            showToast(`[8-퍼즐] ${puzzleState.algorithm} 탐색 시작! 반짝이는 노드를 터치하세요.`, "info");
+        }
         
-        const minimapSvg = d3.select("#minimap-svg");
-        const minimapG = minimapSvg.append("g");
-        const minimapViewport = minimapSvg.append("rect")
-            .attr("class", "minimap-viewport");
+        document.getElementById('btn-puzzle-start').addEventListener('click', startPuzzleGame);
 
-        let minimapState = { tx: 0, ty: 0, scale: 1 };
+        const NODE_WIDTH = 110, NODE_HEIGHT = 110, CELL_SIZE = 34;
 
-        const handleMinimapInteraction = function(event) {
-            if (!currentState.treeData) return;
-            if (event.type === 'touchstart') event.preventDefault();
-            
-            const [mx, my] = d3.pointer(event);
-            const targetX = (mx - minimapState.tx) / minimapState.scale;
-            const targetY = (my - minimapState.ty) / minimapState.scale;
-            
-            const container = document.getElementById('canvas-container');
-            const cw = container.clientWidth;
-            const ch = container.clientHeight;
-            
-            const currentTransform = d3.zoomTransform(svg.node());
-            const k = currentTransform.k;
-            
-            const newTx = cw / 2 - targetX * k;
-            const newTy = ch / 2 - targetY * k;
-            
-            svg.transition().duration(400).call(
-                zoom.transform,
-                d3.zoomIdentity.translate(newTx, newTy).scale(k)
-            );
-        };
+        function renderPuzzleTree() {
+            if (currentMode !== 'puzzle' || !puzzleState.treeData) return;
 
-        minimapSvg.on("click", handleMinimapInteraction)
-                  .on("touchstart", handleMinimapInteraction);
-
-        const zoom = d3.zoom()
-            .scaleExtent([0.1, 2.5])
-            .on("zoom", (event) => {
-                g.attr("transform", event.transform);
-                updateMinimapViewport(event.transform);
-            });
-        svg.call(zoom);
-
-        function updateMinimapViewport(transform) {
-            const container = document.getElementById('canvas-container');
-            const cw = container.clientWidth;
-            const ch = container.clientHeight;
-            minimapViewport
-                .attr("x", -transform.x / transform.k)
-                .attr("y", -transform.y / transform.k)
-                .attr("width", cw / transform.k)
-                .attr("height", ch / transform.k);
-        }
-
-        function getResponsiveTransform() {
-            const container = document.getElementById('canvas-container');
-            const cw = container.clientWidth;
-            const baseScale = cw < 600 ? 0.6 : (cw < 900 ? 0.8 : 1);
-            return d3.zoomIdentity.translate(cw / 2, 80 * baseScale).scale(baseScale);
-        }
-
-        const NODE_WIDTH = 110;
-        const NODE_HEIGHT = 110;
-        const CELL_SIZE = 34;
-
-        function getTargetNodeId() {
-            if (currentState.frontier.length === 0 || currentState.isGoalReached) return null;
-            if (currentState.algorithm === 'BFS') {
-                return currentState.frontier[0].id; 
-            } else {
-                return currentState.frontier[currentState.frontier.length - 1].id; 
-            }
-        }
-
-        function renderTreeModified() {
-            if (!currentState.treeData) return;
-
-            const root = d3.hierarchy(currentState.treeData);
+            const root = d3.hierarchy(puzzleState.treeData);
             const treeLayout = d3.tree().nodeSize([160, 200]);
             treeLayout(root);
             
             const nodes = root.descendants();
             const links = root.links();
             const t = svg.transition().duration(400);
+            
+            g.selectAll("*").remove(); 
 
-            const linkGroup = g.selectAll(".link-group").data(links, d => d.target.data.id);
-            const linkEnter = linkGroup.enter().append("g").attr("class", "link-group");
+            const linkGroup = g.selectAll(".link-group").data(links, d => d.target.data.id).enter().append("g").attr("class", "link-group");
+            linkGroup.append("path").attr("class", "link-path").attr("d", d => `M${d.source.x},${d.source.y + NODE_HEIGHT/2} C${d.source.x},${d.source.y + NODE_HEIGHT/2 + 50} ${d.target.x},${d.target.y - NODE_HEIGHT/2 - 50} ${d.target.x},${d.target.y - NODE_HEIGHT/2}`);
             
-            linkEnter.append("path").attr("class", "link-path");
-            
-            const labelGroup = linkEnter.append("g").attr("class", "label-group");
+            const labelGroup = linkGroup.append("g").attr("class", "label-group").attr("transform", d => `translate(${(d.source.x + d.target.x) / 2}, ${(d.source.y + NODE_HEIGHT/2 + d.target.y - NODE_HEIGHT/2) / 2})`);
             labelGroup.append("rect").attr("class", "link-label-bg").attr("width", 50).attr("height", 24).attr("x", -25).attr("y", -12).attr("rx", 6);
-            labelGroup.append("text").attr("class", "link-label").text(d => d.target.data.actionLabel);
-            
-            const linkUpdate = linkEnter.merge(linkGroup);
-            linkUpdate.select("path").transition(t).attr("d", d => `M${d.source.x},${d.source.y + NODE_HEIGHT/2} C${d.source.x},${d.source.y + NODE_HEIGHT/2 + 50} ${d.target.x},${d.target.y - NODE_HEIGHT/2 - 50} ${d.target.x},${d.target.y - NODE_HEIGHT/2}`);
-            linkUpdate.select(".label-group").transition(t).attr("transform", d => `translate(${(d.source.x + d.target.x) / 2}, ${(d.source.y + NODE_HEIGHT/2 + d.target.y - NODE_HEIGHT/2) / 2})`);
-            linkGroup.exit().remove();
+            labelGroup.append("text").attr("class", "link-label").style("font-size", "13px").text(d => d.target.data.actionLabel);
 
-            const nodeGroup = g.selectAll(".node-group").data(nodes, d => d.data.id);
-            const nodeEnter = nodeGroup.enter().append("g")
-                .attr("class", "node-group")
-                .attr("transform", d => `translate(${d.parent?d.parent.x:d.x},${d.parent?d.parent.y:d.y})`);
+            const targetId = puzzleState.frontier.length > 0 && !puzzleState.isGoalReached ? 
+                (puzzleState.algorithm === 'BFS' ? puzzleState.frontier[0].id : puzzleState.frontier[puzzleState.frontier.length - 1].id) : null;
+
+            const nodeGroup = g.selectAll(".node-group").data(nodes, d => d.data.id).enter().append("g").attr("class", "node-group")
+                .attr("transform", d => `translate(${d.x},${d.y})`);
                 
             const handleNodeAction = function(event, d) {
                 if(event.type === 'touchstart') event.preventDefault(); 
-                handleNodeClick(d);
+                handlePuzzleNodeClick(d);
             };
-            nodeEnter.on("click", handleNodeAction).on("touchstart", handleNodeAction);
-                
-            nodeEnter.append("rect").attr("class", "highlight-ring").attr("x", -NODE_WIDTH/2 - 6).attr("y", -NODE_HEIGHT/2 - 6).attr("width", NODE_WIDTH + 12).attr("height", NODE_HEIGHT + 12).style("opacity", 0);
-            nodeEnter.append("rect").attr("class", "node-rect").attr("x", -NODE_WIDTH/2).attr("y", -NODE_HEIGHT/2).attr("width", NODE_WIDTH).attr("height", NODE_HEIGHT);
+            nodeGroup.on("click", handleNodeAction).on("touchstart", handleNodeAction);
             
-            for(let i=0; i<9; i++) {
-                const cx = -NODE_WIDTH/2 + 4 + (i%3) * CELL_SIZE;
-                const cy = -NODE_WIDTH/2 + 4 + Math.floor(i/3) * CELL_SIZE;
-                const cellGroup = nodeEnter.append("g").attr("class", `cell-group-${i}`);
+            nodeGroup.each(function(d) {
+                const nodeElement = d3.select(this); const data = d.data; const parentData = d.parent ? d.parent.data : null;
+                const isTarget = (data.id === targetId);
                 
-                cellGroup.append("rect").attr("class", `node-cell cell-bg-${i}`).attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE);
-                cellGroup.append("text").attr("class", `node-text cell-text-${i}`).attr("x", cx + CELL_SIZE/2).attr("y", cy + CELL_SIZE/2);
-                cellGroup.append("rect").attr("class", `cell-click cell-click-${i}`).attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE).style("fill", "transparent").style("cursor", "pointer");
-            }
-
-            const nodeUpdate = nodeEnter.merge(nodeGroup);
-            nodeUpdate.transition(t).attr("transform", d => `translate(${d.x},${d.y})`);
-
-            nodeUpdate.each(function(d) {
-                const nodeElement = d3.select(this);
-                const data = d.data;
-                const parentData = d.parent ? d.parent.data : null;
-                const status = data.status;
-                const targetId = getTargetNodeId();
-                const isTarget = (data.id === targetId) && !currentState.isGoalReached;
+                let highlightClass = "highlight-ring";
+                let highlightOpacity = 0;
+                if (data.isGoal && data.status === 'solved') { highlightClass += " goal"; highlightOpacity = 1; } 
+                else if (isTarget) { highlightClass += ` ${puzzleState.algorithm === 'DFS' ? 'dfs' : 'bfs'}`; highlightOpacity = 1; } 
                 
-                const highlight = nodeElement.select(".highlight-ring");
-                if (data.isGoal && status === 'solved') { highlight.style("opacity", 1).attr("class", "highlight-ring goal"); } 
-                else if (isTarget) { highlight.style("opacity", 1).attr("class", `highlight-ring ${currentState.algorithm === 'DFS' ? 'dfs' : 'bfs'}`); } 
-                else { highlight.style("opacity", 0); }
+                nodeElement.append("rect").attr("class", highlightClass).attr("x", -NODE_WIDTH/2 - 6).attr("y", -NODE_HEIGHT/2 - 6).attr("width", NODE_WIDTH + 12).attr("height", NODE_HEIGHT + 12).style("opacity", highlightOpacity);
+                nodeElement.append("rect").attr("class", "node-rect").attr("x", -NODE_WIDTH/2).attr("y", -NODE_HEIGHT/2).attr("width", NODE_WIDTH).attr("height", NODE_HEIGHT);
 
                 for(let i=0; i<9; i++) {
-                    const bg = nodeElement.select(`.cell-bg-${i}`);
-                    const text = nodeElement.select(`.cell-text-${i}`);
-                    const clickArea = nodeElement.select(`.cell-click-${i}`);
-
+                    const cx = -NODE_WIDTH/2 + 4 + (i%3) * CELL_SIZE; const cy = -NODE_WIDTH/2 + 4 + Math.floor(i/3) * CELL_SIZE;
+                    const cellGroup = nodeElement.append("g").attr("class", `cell-group-${i}`);
+                    
                     const handleCellAction = (event) => {
-                        event.stopPropagation();
-                        if(event.type === 'touchstart') event.preventDefault();
-                        
-                        const expectedBlankIdx = data.state.indexOf(0);
-                        if (i === expectedBlankIdx) {
-                            data.status = 'solved';
-                            currentState.searchCount++;
-                            playSound('success');
-                            if (data.isGoal) {
-                                currentState.isGoalReached = true;
-                                showToast("정답입니다! 목표 상태에 도달했습니다 🎉", "success");
-                            } else { showToast("정답입니다!", "success"); }
-                            renderTreeModified();
+                        event.stopPropagation(); if(event.type === 'touchstart') event.preventDefault();
+                        if (i === data.state.indexOf(0)) {
+                            data.status = 'solved'; puzzleState.searchCount++; playSound('success');
+                            if (data.isGoal) { puzzleState.isGoalReached = true; showToast("정답입니다! 목표 상태에 도달했습니다 🎉", "success"); } 
+                            else { showToast("정답입니다!", "success"); }
+                            renderPuzzleTree();
                         } else {
-                            playSound('error');
-                            showToast("틀렸습니다! 빈칸으로 보낼 올바른 조각을 선택하세요.", "error");
+                            playSound('error'); showToast("틀렸습니다! 빈칸으로 보낼 올바른 조각을 선택하세요.", "error");
                         }
                     };
 
-                    if (status === 'hidden') {
-                        text.style("display", "none");
-                        bg.attr("class", `node-cell cell-bg-${i}`);
-                        clickArea.style("display", "none").on("click", null).on("touchstart", null);
+                    if (data.status === 'hidden') {
+                        cellGroup.append("rect").attr("class", `node-cell`).attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE);
+                    } else if (data.status === 'input') {
+                        const displayVal = parentData.state[i];
+                        const isAdj = isAdjacent(i, parentData.state.indexOf(0)); 
+                        let bgClass = displayVal === 0 ? "node-cell empty" : (isAdj ? "node-cell clickable" : "node-cell");
                         
-                    } else if (status === 'input') {
-                        text.style("display", "block");
-                        const pState = parentData.state;
-                        const displayVal = pState[i];
-                        text.text(displayVal === 0 ? '' : displayVal);
-
-                        const blankIdx = pState.indexOf(0);
-                        const isAdj = isAdjacent(i, blankIdx); 
-
-                        if (displayVal === 0) {
-                            bg.attr("class", `node-cell empty cell-bg-${i}`);
-                            clickArea.style("display", "none").on("click", null).on("touchstart", null);
-                        } else if (isAdj) {
-                            bg.attr("class", `node-cell clickable cell-bg-${i}`); 
-                            clickArea.style("display", "block")
-                                     .on("click", handleCellAction)
-                                     .on("touchstart", handleCellAction);
-                        } else {
-                            bg.attr("class", `node-cell cell-bg-${i}`);
-                            clickArea.style("display", "none").on("click", null).on("touchstart", null);
+                        cellGroup.append("rect").attr("class", bgClass).attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE);
+                        if(displayVal !== 0) cellGroup.append("text").attr("class", "node-text").attr("x", cx + CELL_SIZE/2).attr("y", cy + CELL_SIZE/2).text(displayVal);
+                        
+                        if(isAdj && displayVal !== 0) {
+                            cellGroup.append("rect").attr("class", "cell-click").attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE).style("fill", "transparent").style("cursor", "pointer")
+                                     .on("click", handleCellAction).on("touchstart", handleCellAction);
                         }
                     } else { 
-                        text.style("display", "block");
                         const displayVal = data.state[i];
-                        text.text(displayVal === 0 ? '' : displayVal);
-                        bg.attr("class", `node-cell ${displayVal === 0 ? 'empty' : ''} cell-bg-${i}`);
-                        clickArea.style("display", "none").on("click", null).on("touchstart", null);
+                        cellGroup.append("rect").attr("class", `node-cell ${displayVal === 0 ? 'empty' : ''}`).attr("x", cx).attr("y", cy).attr("width", CELL_SIZE).attr("height", CELL_SIZE);
+                        if(displayVal !== 0) cellGroup.append("text").attr("class", "node-text").attr("x", cx + CELL_SIZE/2).attr("y", cy + CELL_SIZE/2).text(displayVal);
                     }
                 }
             });
 
-            nodeGroup.exit().remove();
-            updateStats();
-            updateMinimap(nodes, links);
+            document.getElementById('stat-visited').innerHTML = `${puzzleState.searchCount}<span class="text-xs text-gray-500 ml-1">회</span>`;
+            updateMinimap(nodes, links, NODE_WIDTH, NODE_HEIGHT);
         }
 
-        function updateMinimap(nodes, links) {
-            minimapG.selectAll("*").remove();
-            if (nodes.length === 0) return;
+        function handlePuzzleNodeClick(d3Node) {
+            if (puzzleState.isGoalReached) { playSound('click'); showToast("목표 상태에 도달했습니다! 재시작해주세요.", "info"); return; }
+            const data = d3Node.data;
+            const targetId = puzzleState.frontier.length > 0 ? (puzzleState.algorithm === 'BFS' ? puzzleState.frontier[0].id : puzzleState.frontier[puzzleState.frontier.length - 1].id) : null;
             
-            let minX = d3.min(nodes, d => d.x) - NODE_WIDTH;
-            let maxX = d3.max(nodes, d => d.x) + NODE_WIDTH;
-            let minY = d3.min(nodes, d => d.y) - NODE_HEIGHT;
-            let maxY = d3.max(nodes, d => d.y) + NODE_HEIGHT;
-
-            const w = maxX - minX;
-            const h = maxY - minY;
-
-            const container = document.getElementById('minimap');
-            const minimapW = container.clientWidth || 200;
-            const minimapH = container.clientHeight || 150;
-            
-            const scale = Math.min(minimapW / (w || 1), minimapH / (h || 1)) * 0.85;
-            const tx = (minimapW - w * scale) / 2 - minX * scale;
-            const ty = (minimapH - h * scale) / 2 - minY * scale;
-
-            minimapState = { tx, ty, scale };
-            minimapG.attr("transform", `translate(${tx},${ty}) scale(${scale})`);
-
-            minimapG.selectAll(".mini-link")
-                .data(links).enter().append("line")
-                .attr("class", "mini-link")
-                .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
-                .attr("x2", d => d.target.x).attr("y2", d => d.target.y)
-                .attr("stroke", "#cbd5e1").attr("stroke-width", 4);
-
-            minimapG.selectAll(".mini-node")
-                .data(nodes).enter().append("rect")
-                .attr("class", "mini-node")
-                .attr("x", d => d.x - NODE_WIDTH/2).attr("y", d => d.y - NODE_HEIGHT/2)
-                .attr("width", NODE_WIDTH).attr("height", NODE_HEIGHT)
-                .attr("fill", d => {
-                    if (d.data.isGoal && d.data.status === 'solved') return "#10b981";
-                    const targetId = getTargetNodeId();
-                    if (targetId && targetId === d.data.id && !currentState.isGoalReached) return (currentState.algorithm === 'DFS' ? "#ef4444" : "#3b82f6");
-                    return d.data.status === 'solved' ? "#64748b" : "#f1f5f9";
-                })
-                .attr("stroke", "#94a3b8").attr("stroke-width", 2);
-
-            minimapViewport.attr("transform", `translate(${-tx/scale},${-ty/scale}) scale(${1/scale})`);
+            if (data.id !== targetId) {
+                playSound('error');
+                if (data.status === 'solved' && data.expanded) showToast("이미 탐색이 완료된 노드입니다.", "error");
+                else showToast(`현재 알고리즘(${puzzleState.algorithm})상 다음에 탐색할 노드가 아닙니다.`, "error");
+                return;
+            }
+            playSound('click');
+            if (data.status === 'hidden') {
+                if (puzzleState.searchCount === 1) { 
+                    data.status = 'solved'; puzzleState.searchCount++; playSound('success');
+                    renderPuzzleTree(); showToast("첫 번째 하위 퍼즐이 열렸습니다. 계속 탐색하세요.", "info");
+                } else {
+                    data.status = 'input'; renderPuzzleTree(); showToast("빈칸(노란색)으로 이동할 파란색 숫자를 터치하세요.", "info");
+                }
+            } else if (data.status === 'solved') {
+                expandPuzzleNode(data);
+            }
         }
 
-        function expandNode(nodeData) {
+        function expandPuzzleNode(nodeData) {
             playSound('expand');
+            const idx = puzzleState.frontier.findIndex(n => n.id === nodeData.id);
+            if (idx > -1) puzzleState.frontier.splice(idx, 1);
             
-            const idx = currentState.frontier.findIndex(n => n.id === nodeData.id);
-            if (idx > -1) currentState.frontier.splice(idx, 1);
-            
-            nodeData.expanded = true;
+            nodeData.expanded = true; nodeData.children = [];
             const childrenStates = getValidChildren(nodeData.state);
-            nodeData.children = [];
-            
-            const newDepth = (nodeData.depth || 0) + 1;
             const newChildrenNodes = [];
 
             childrenStates.forEach(child => {
                 const stateStr = stateToString(child.state);
-                if (!currentState.explored.has(stateStr)) {
-                    currentState.explored.add(stateStr);
+                if (!puzzleState.explored.has(stateStr)) {
+                    puzzleState.explored.add(stateStr);
                     const newNode = {
-                        id: ++currentState.nodeIdCounter, state: child.state, actionLabel: child.label,
-                        children: null, expanded: false, isGoal: isGoal(child.state),
-                        userState: Array(9).fill(''), status: 'hidden', depth: newDepth
+                        id: ++puzzleState.nodeIdCounter, state: child.state, actionLabel: child.label,
+                        children: null, expanded: false, isGoal: isGoal(child.state), status: 'hidden'
                     };
                     nodeData.children.push(newNode);
                     newChildrenNodes.push(newNode);
                 }
             });
 
-            if (currentState.algorithm === 'DFS') {
-                const stackOrder = [...newChildrenNodes].reverse();
-                stackOrder.forEach(n => currentState.frontier.push(n));
+            if (puzzleState.algorithm === 'DFS') {
+                [...newChildrenNodes].reverse().forEach(n => puzzleState.frontier.push(n));
             } else {
-                newChildrenNodes.forEach(n => currentState.frontier.push(n));
+                newChildrenNodes.forEach(n => puzzleState.frontier.push(n));
             }
-
-            renderTreeModified();
-            if (nodeData.children.length === 0 && !currentState.isGoalReached) {
-                showToast("막힘(Dead End): 새로운 상태가 없습니다.", "info");
-            }
+            renderPuzzleTree();
+            if (nodeData.children.length === 0 && !puzzleState.isGoalReached) showToast("막힘(Dead End): 새로운 상태가 없습니다.", "info");
         }
-
-        function handleNodeClick(d3Node) {
-            if (currentState.isGoalReached) {
-                playSound('click'); showToast("목표 상태에 도달했습니다! 재시작해주세요.", "info"); return;
-            }
-
-            const data = d3Node.data;
-            const targetId = getTargetNodeId();
-            if (data.id !== targetId) {
-                playSound('error');
-                if (data.status === 'solved' && data.expanded) showToast("이미 탐색이 완료된 노드입니다.", "error");
-                else showToast(`현재 알고리즘(${currentState.algorithm})상 다음에 탐색할 노드가 아닙니다.`, "error");
-                return;
-            }
-            
-            playSound('click');
-
-            if (data.status === 'hidden') {
-                // 수정된 부분: 전체 게임에서 첫 번째로 여는 자식 노드만 자동으로 열리게 설정
-                if (currentState.searchCount === 1) { 
-                    data.status = 'solved';
-                    currentState.searchCount++;
-                    playSound('success');
-                    renderTreeModified();
-                    showToast("첫 번째 하위 퍼즐이 열렸습니다. 계속 탐색하세요.", "info");
-                } else {
-                    data.status = 'input';
-                    renderTreeModified();
-                    showToast("빈칸(노란색)으로 이동할 파란색 숫자를 터치하세요.", "info");
-                }
-            } else if (data.status === 'solved') {
-                expandNode(data);
-            }
-        }
-
-        function startGame() {
-            playSound('click');
-            const algRadios = document.getElementsByName('algorithm');
-            let selectedAlg = 'BFS';
-            for (let radio of algRadios) if (radio.checked) selectedAlg = radio.value;
-
-            currentState.goal = [...currentProblemGoal];
-            currentState.initial = [...currentProblemInitial];
-            currentState.algorithm = selectedAlg;
-            currentState.explored = new Set();
-            currentState.frontier = [];
-            currentState.nodeIdCounter = 0;
-            currentState.searchCount = 1; 
-            currentState.isGoalReached = false;
-
-            renderUIPuzzle('ui-initial-state', currentState.initial);
-            renderUIPuzzle('ui-goal-state', currentState.goal);
-
-            currentState.treeData = {
-                id: ++currentState.nodeIdCounter, state: currentState.initial, actionLabel: '출발!',
-                children: null, expanded: false, isGoal: false, userState: Array(9).fill(''),
-                status: 'solved', depth: 0
-            };
-
-            currentState.explored.add(stateToString(currentState.initial));
-            currentState.frontier.push(currentState.treeData);
-            if (isGoal(currentState.initial)) { currentState.treeData.isGoal = true; currentState.isGoalReached = true; }
-
-            svg.transition().duration(750).call(zoom.transform, getResponsiveTransform());
-            renderTreeModified();
-            showToast(`${selectedAlg} 탐색 시작! 반짝이는 노드를 터치하세요.`, "info");
-        }
-
-        document.getElementById('btn-start').addEventListener('click', startGame);
 
         document.getElementById('btn-textbook').addEventListener('click', () => {
+            if(currentMode !== 'puzzle') return;
             playSound('click');
-            currentProblemGoal = [...textbookProblemGoal];
-            currentProblemInitial = [...textbookProblemInitial];
-            renderUIPuzzle('ui-initial-state', currentProblemInitial);
-            renderUIPuzzle('ui-goal-state', currentProblemGoal);
-            showToast("교과서 예제 문제가 설정되었습니다. '탐색 시작'을 눌러주세요.", "info");
+            currentProblemGoal = [...textbookProblemGoal]; currentProblemInitial = [...textbookProblemInitial];
+            renderUIPuzzle('ui-initial-state', currentProblemInitial); renderUIPuzzle('ui-goal-state', currentProblemGoal);
+            showToast("교과서 예제 문제가 설정되었습니다.", "info");
         });
 
         document.getElementById('btn-shuffle').addEventListener('click', () => {
+            if(currentMode !== 'puzzle') return;
             playSound('click');
             let newGoal = [0, 1, 2, 3, 4, 5, 6, 7, 8];
-            for (let i = newGoal.length - 1; i > 0; i--) {
-                const j = Math.floor(Math.random() * (i + 1));
-                [newGoal[i], newGoal[j]] = [newGoal[j], newGoal[i]];
-            }
-            const shuffleSteps = Math.floor(Math.random() * 11) + 15; 
-            currentProblemGoal = newGoal;
-            currentProblemInitial = generateRandomSolvable(newGoal, shuffleSteps);
-            renderUIPuzzle('ui-initial-state', currentProblemInitial);
-            renderUIPuzzle('ui-goal-state', currentProblemGoal);
+            for (let i = 8; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [newGoal[i], newGoal[j]] = [newGoal[j], newGoal[i]]; }
+            currentProblemGoal = newGoal; currentProblemInitial = generateRandomSolvable(newGoal, Math.floor(Math.random() * 11) + 15);
+            renderUIPuzzle('ui-initial-state', currentProblemInitial); renderUIPuzzle('ui-goal-state', currentProblemGoal);
             showToast("새로운 무작위 문제가 출제되었습니다.", "info");
         });
-        
-        document.getElementsByName('algorithm').forEach(radio => {
-            radio.addEventListener('change', (e) => {
-                if(currentState.treeData && !currentState.isGoalReached) {
-                    currentState.algorithm = e.target.value;
-                    renderTreeModified();
-                    showToast(`알고리즘 변경됨: ${e.target.value}`, "info");
-                }
-            });
+
+        // ---------------------------------------------------------
+        // D3 SHARED SETUP (Zoom, Minimap)
+        // ---------------------------------------------------------
+        const svg = d3.select("#tree-svg"); const g = svg.append("g");
+        const minimapSvg = d3.select("#minimap-svg"); const minimapG = minimapSvg.append("g");
+        const minimapViewport = minimapSvg.append("rect").attr("class", "minimap-viewport");
+        let minimapState = { tx: 0, ty: 0, scale: 1 };
+
+        const handleMinimapInteraction = function(event) {
+            if (event.type === 'touchstart') event.preventDefault();
+            const [mx, my] = d3.pointer(event);
+            const targetX = (mx - minimapState.tx) / minimapState.scale;
+            const targetY = (my - minimapState.ty) / minimapState.scale;
+            const container = document.getElementById('svg-wrapper');
+            const currentTransform = d3.zoomTransform(svg.node());
+            svg.transition().duration(400).call(
+                zoom.transform,
+                d3.zoomIdentity.translate(container.clientWidth / 2 - targetX * currentTransform.k, container.clientHeight / 2 - targetY * currentTransform.k).scale(currentTransform.k)
+            );
+        };
+        minimapSvg.on("click", handleMinimapInteraction).on("touchstart", handleMinimapInteraction);
+
+        const zoom = d3.zoom().scaleExtent([0.1, 2.5]).on("zoom", (event) => {
+            g.attr("transform", event.transform);
+            minimapViewport.attr("x", -event.transform.x / event.transform.k).attr("y", -event.transform.y / event.transform.k)
+                .attr("width", document.getElementById('svg-wrapper').clientWidth / event.transform.k)
+                .attr("height", document.getElementById('svg-wrapper').clientHeight / event.transform.k);
         });
+        svg.call(zoom);
+
+        function getGraphResponsiveTransform() { return d3.zoomIdentity.translate(document.getElementById('svg-wrapper').clientWidth / 2, document.getElementById('svg-wrapper').clientHeight / 2.5).scale(document.getElementById('svg-wrapper').clientWidth < 600 ? 0.7 : 0.9); }
+        function getPuzzleResponsiveTransform() { 
+            const cw = document.getElementById('svg-wrapper').clientWidth;
+            const sc = cw < 600 ? 0.6 : (cw < 900 ? 0.8 : 1);
+            return d3.zoomIdentity.translate(cw / 2, 80 * sc).scale(sc); 
+        }
+
+        function updateMinimap(nodes, links, nW, nH) {
+            minimapG.selectAll("*").remove();
+            if (nodes.length === 0) return;
+            let minX = d3.min(nodes, d => d.x) - nW; let maxX = d3.max(nodes, d => d.x) + nW;
+            let minY = d3.min(nodes, d => d.y) - nH; let maxY = d3.max(nodes, d => d.y) + nH;
+            const container = document.getElementById('minimap');
+            const scale = Math.min((container.clientWidth||200) / (maxX-minX || 1), (container.clientHeight||150) / (maxY-minY || 1)) * 0.85;
+            const tx = ((container.clientWidth||200) - (maxX-minX) * scale) / 2 - minX * scale;
+            const ty = ((container.clientHeight||150) - (maxY-minY) * scale) / 2 - minY * scale;
+
+            minimapState = { tx, ty, scale };
+            minimapG.attr("transform", `translate(${tx},${ty}) scale(${scale})`);
+
+            minimapG.selectAll(".mini-link").data(links).enter().append("line")
+                .attr("x1", d => d.source.x).attr("y1", d => d.source.y).attr("x2", d => d.target.x).attr("y2", d => d.target.y)
+                .attr("stroke", "#cbd5e1").attr("stroke-width", 3);
+
+            minimapG.selectAll(".mini-node").data(nodes).enter().append(currentMode === 'graph' ? "circle" : "rect")
+                .each(function(d) {
+                    const el = d3.select(this);
+                    if(currentMode === 'graph') el.attr("cx", d.x).attr("cy", d.y).attr("r", nW/2);
+                    else el.attr("x", d.x - nW/2).attr("y", d.y - nH/2).attr("width", nW).attr("height", nH);
+                })
+                .attr("fill", d => {
+                    if (currentMode === 'puzzle' && d.data && d.data.isGoal && d.data.status === 'solved') return "#10b981";
+                    
+                    let isTarget = false;
+                    if(currentMode === 'puzzle') {
+                        let targetId = puzzleState.frontier.length > 0 && !puzzleState.isGoalReached ? (puzzleState.algorithm === 'BFS' ? puzzleState.frontier[0].id : puzzleState.frontier[puzzleState.frontier.length - 1].id) : null;
+                        isTarget = (targetId && targetId === d.data.id);
+                    } else {
+                        let targetId = (graphState.isPathSolved && !graphState.isGoalReached) ? graphState.expectedPath[graphState.currentIndex] : null;
+                        isTarget = (targetId && targetId === d.id);
+                    }
+                    
+                    if (isTarget) return ((currentMode === 'puzzle' ? puzzleState.algorithm : graphState.algorithm) === 'DFS' ? "#ef4444" : "#3b82f6");
+                    
+                    let isSolved = currentMode === 'puzzle' ? (d.data.status === 'solved' || d.data.status === 'explored') : (d.status === 'explored');
+                    return isSolved ? "#64748b" : "#f1f5f9";
+                })
+                .attr("stroke", "#94a3b8").attr("stroke-width", 2);
+
+            minimapViewport.attr("transform", `translate(${-tx/scale},${-ty/scale}) scale(${1/scale})`);
+        }
 
         document.getElementById('btn-zoom-in').addEventListener('click', () => { svg.transition().call(zoom.scaleBy, 1.2); });
         document.getElementById('btn-zoom-out').addEventListener('click', () => { svg.transition().call(zoom.scaleBy, 0.8); });
-        document.getElementById('btn-zoom-fit').addEventListener('click', () => {
-            svg.transition().call(zoom.transform, getResponsiveTransform());
-        });
+        document.getElementById('btn-zoom-fit').addEventListener('click', () => { svg.transition().call(zoom.transform, currentMode === 'graph' ? getGraphResponsiveTransform() : getPuzzleResponsiveTransform()); });
 
         const conceptModal = document.getElementById('concept-modal');
-        function openModal() { conceptModal.classList.remove('hidden'); playSound('click'); }
-        function closeModal() { conceptModal.classList.add('hidden'); playSound('click'); }
-
-        document.getElementById('btn-concept').addEventListener('click', openModal);
-        document.getElementById('btn-close-modal').addEventListener('click', closeModal);
-        document.getElementById('btn-close-modal-bottom').addEventListener('click', closeModal);
-        conceptModal.addEventListener('click', (e) => { if (e.target === conceptModal) closeModal(); });
+        document.getElementById('btn-concept').addEventListener('click', () => { conceptModal.classList.remove('hidden'); playSound('click'); });
+        document.getElementById('btn-close-modal').addEventListener('click', () => { conceptModal.classList.add('hidden'); playSound('click'); });
+        document.getElementById('btn-close-modal-bottom').addEventListener('click', () => { conceptModal.classList.add('hidden'); playSound('click'); });
+        conceptModal.addEventListener('click', (e) => { if (e.target === conceptModal) { conceptModal.classList.add('hidden'); playSound('click'); } });
 
         window.onload = () => {
             renderUIPuzzle('ui-initial-state', currentProblemInitial);
             renderUIPuzzle('ui-goal-state', currentProblemGoal);
-            startGame();
+            switchMode('graph');
         };
         
         window.addEventListener('resize', () => {
-             if (currentState.treeData && currentState.searchCount === 1) {
-                 svg.call(zoom.transform, getResponsiveTransform());
-             }
+             if (currentMode === 'puzzle' && puzzleState.treeData && puzzleState.searchCount === 1) svg.call(zoom.transform, getPuzzleResponsiveTransform());
+             else if (currentMode === 'graph' && graphState.nodes.length > 0 && graphState.currentIndex === 0) svg.call(zoom.transform, getGraphResponsiveTransform());
         });
     </script>
 </body>
